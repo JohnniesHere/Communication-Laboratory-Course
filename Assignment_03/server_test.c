@@ -12,7 +12,7 @@
 #include <signal.h>
 
 #define BUFFER_SIZE 4096
-#define TEST_PORT 8087  // Changed to less commonly used port
+#define TEST_PORT 8087
 #define GREEN "\033[0;32m"
 #define RED "\033[0;31m"
 #define RESET "\033[0m"
@@ -26,18 +26,16 @@ void kill_existing_process() {
     char cmd[100];
     snprintf(cmd, sizeof(cmd), "fuser -k %d/tcp >/dev/null 2>&1", TEST_PORT);
     system(cmd);
-    sleep(1);  // Wait for port to be freed
+    sleep(1);
 }
 
 void setup_test_environment() {
     // Clean up any previous test files
     system("rm -rf test_files");
-
-    // Create test directory and files
     system("mkdir -p test_files");
 
     // Create test.html
-    FILE* f = fopen("test_files/test.html", "w");
+    FILE *f = fopen("test_files/test.html", "w");
     if (f) {
         fprintf(f, "<html><body>Test</body></html>");
         fclose(f);
@@ -64,6 +62,55 @@ void setup_test_environment() {
         fprintf(f, "<html><body>Index</body></html>");
         fclose(f);
     }
+
+    // Create large binary file (10MB)
+    f = fopen("test_files/large.bin", "wb");
+    if (f) {
+        char buffer[1024];
+        memset(buffer, 'A', sizeof(buffer));
+        for (int i = 0; i < 10240; i++) {
+            fwrite(buffer, 1, sizeof(buffer), f);
+        }
+        fclose(f);
+    }
+
+    // Create test files with different extensions
+    // MP3
+    f = fopen("test_files/test.mp3", "wb");
+    if (f) {
+        fwrite("MP3DATA", 1, 7, f);
+        fclose(f);
+    }
+
+    // MP4
+    f = fopen("test_files/test.mp4", "wb");
+    if (f) {
+        fwrite("MP4DATA", 1, 7, f);
+        fclose(f);
+    }
+
+    // PNG
+    f = fopen("test_files/test.png", "wb");
+    if (f) {
+        fwrite("PNGDATA", 1, 7, f);
+        fclose(f);
+        // Create test files with different extensions
+        const char *test_files[] = {
+                "test.html", "test.jpg", "test.gif", "test.png",
+                "test.css", "test.au", "test.wav", "test.avi",
+                "test.mpeg", "test.mp3"
+        };
+
+        for (int i = 0; i < sizeof(test_files) / sizeof(test_files[0]); i++) {
+            char path[256];
+            snprintf(path, sizeof(path), "test_files/%s", test_files[i]);
+            FILE *f = fopen(path, "w");
+            if (f) {
+                fprintf(f, "TEST DATA for %s", test_files[i]);
+                fclose(f);
+            }
+        }
+    }
 }
 
 void cleanup_test_environment() {
@@ -84,14 +131,13 @@ void start_server() {
 
     server_pid = fork();
     if (server_pid == 0) {
-        // Child process - exec server
         char port_str[10];
         snprintf(port_str, sizeof(port_str), "%d", TEST_PORT);
         execl("./server", "./server", port_str, "4", "8", "100", NULL);
         perror("Failed to start server");
         exit(1);
     }
-    sleep(2); // Wait longer for server to start
+    sleep(2);
 }
 
 int send_request(const char* method, const char* path, char* response) {
@@ -131,7 +177,7 @@ void print_test_result(const char* test_name, int passed, const char* response) 
         printf("%s✓ %s: PASSED%s\n", GREEN, test_name, RESET);
     } else {
         printf("%s✗ %s: FAILED%s\n", RED, test_name, RESET);
-        printf("Response received:\n%s\n", response);  // Print response for failed tests
+        printf("Response received:\n%s\n", response);
     }
 }
 
@@ -190,8 +236,7 @@ void test_400_bad_request() {
 }
 
 void test_directory_listing() {
-    // First remove index.html for this test
-    unlink("test_files/index.html");  // Remove index.html
+    unlink("test_files/index.html");
 
     char response[BUFFER_SIZE];
     send_request("GET", "/test_files/", response);
@@ -200,7 +245,6 @@ void test_directory_listing() {
                       strstr(response, "Index of") != NULL,
                       response);
 
-    // Recreate index.html for other tests
     FILE* f = fopen("test_files/index.html", "w");
     if (f) {
         fprintf(f, "<html><body>Index</body></html>");
@@ -219,14 +263,103 @@ void test_index_html() {
 
 void test_mime_types() {
     char response[BUFFER_SIZE];
+
+    // Test HTML mime types
+    FILE* f = fopen("test_files/test.html", "w");
+    if (f) { fprintf(f, "HTML TEST"); fclose(f); }
     send_request("GET", "/test_files/test.html", response);
-    print_test_result("MIME Types",
+    print_test_result("HTML MIME Type",
                       strstr(response, "Content-Type: text/html") != NULL,
+                      response);
+
+    // Test JPEG mime types
+    f = fopen("test_files/test.jpg", "w");
+    if (f) { fprintf(f, "JPG TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.jpg", response);
+    print_test_result("JPEG MIME Type",
+                      strstr(response, "Content-Type: image/jpeg") != NULL,
+                      response);
+
+    // Test GIF mime type
+    f = fopen("test_files/test.gif", "w");
+    if (f) { fprintf(f, "GIF TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.gif", response);
+    print_test_result("GIF MIME Type",
+                      strstr(response, "Content-Type: image/gif") != NULL,
+                      response);
+
+    // Test PNG mime type
+    f = fopen("test_files/test.png", "w");
+    if (f) { fprintf(f, "PNG TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.png", response);
+    print_test_result("PNG MIME Type",
+                      strstr(response, "Content-Type: image/png") != NULL,
+                      response);
+
+    // Test CSS mime type
+    f = fopen("test_files/test.css", "w");
+    if (f) { fprintf(f, "CSS TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.css", response);
+    print_test_result("CSS MIME Type",
+                      strstr(response, "Content-Type: text/css") != NULL,
+                      response);
+
+    // Test AU mime type
+    f = fopen("test_files/test.au", "w");
+    if (f) { fprintf(f, "AU TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.au", response);
+    print_test_result("AU MIME Type",
+                      strstr(response, "Content-Type: audio/basic") != NULL,
+                      response);
+
+    // Test WAV mime type
+    f = fopen("test_files/test.wav", "w");
+    if (f) { fprintf(f, "WAV TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.wav", response);
+    print_test_result("WAV MIME Type",
+                      strstr(response, "Content-Type: audio/wav") != NULL,
+                      response);
+
+    // Test AVI mime type
+    f = fopen("test_files/test.avi", "w");
+    if (f) { fprintf(f, "AVI TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.avi", response);
+    print_test_result("AVI MIME Type",
+                      strstr(response, "Content-Type: video/x-msvideo") != NULL,
+                      response);
+
+    // Test MPEG mime type
+    f = fopen("test_files/test.mpeg", "w");
+    if (f) { fprintf(f, "MPEG TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.mpeg", response);
+    print_test_result("MPEG MIME Type",
+                      strstr(response, "Content-Type: video/mpeg") != NULL,
+                      response);
+
+    // Test MP3 mime type
+    f = fopen("test_files/test.mp3", "w");
+    if (f) { fprintf(f, "MP3 TEST"); fclose(f); }
+    send_request("GET", "/test_files/test.mp3", response);
+    print_test_result("MP3 MIME Type",
+                      strstr(response, "Content-Type: audio/mpeg") != NULL,
+                      response);
+}
+
+void test_large_file_handling() {
+    char response[BUFFER_SIZE];
+    send_request("GET", "/test_files/large.bin", response);
+
+    // Check headers
+    int has_content_length = strstr(response, "Content-Length: 10485760") != NULL;
+    int has_connection_close = strstr(response, "Connection: close") != NULL;
+    int has_200_ok = strstr(response, "HTTP/1.0 200 OK") != NULL;
+
+    print_test_result("Large File Handling",
+                      has_content_length && has_connection_close && has_200_ok,
                       response);
 }
 
 int main(int argc, char *argv[]) {
-    // Set up signal handlers
     signal(SIGINT, handle_exit);
     signal(SIGTERM, handle_exit);
 
@@ -244,6 +377,7 @@ int main(int argc, char *argv[]) {
     test_directory_listing();
     test_index_html();
     test_mime_types();
+    test_large_file_handling();
 
     // Print summary
     printf("\n📊 Test Summary:\n");
